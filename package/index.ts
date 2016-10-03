@@ -5180,6 +5180,153 @@ export function createDerivedComponent<TData>(original: (data?: any, children?: 
     return createVirtualComponent<TData>(merged);
 }
 
+
+
+// Node factories
+
+/** Node factory component defining the result node life cycle */
+export interface INodeFactoryComponent<TCtx extends INodeFactoryCtx<TData>, TData extends INodeFactoryData> extends IBobrilComponent {
+    /** 
+     * called before new node in vdom should be created, me members (tag, attrs, children, ...) could be modified, 
+     * ctx is initialized to { data: me.data||{}, me: me, cfg: fromparent }
+     */
+    init?(ctx: TCtx, me: IBobrilCacheNode): void;
+
+    /** 
+     * in case of update after shouldChange returns true, you can do any update/init tasks, 
+     * ctx.data is updated to me.data and oldMe.component updated to me.component before calling this
+     * in case of init this is called after init method, oldMe is equal to undefined in that case
+     */
+    render?(ctx: TCtx, me: IBobrilNode, oldMe?: IBobrilCacheNode): void;
+    /**
+     *  called after all children are rendered, but before updating own attrs
+     *  so this is useful for kind of layout in JS features
+     */
+    postRender?(ctx: TCtx, me: IBobrilNode, oldMe?: IBobrilCacheNode): void;
+    /** return false when whole subtree should not be changed from last time, 
+     * you can still update any me members except key, default implementation always return true 
+     */
+    shouldChange?(ctx: TCtx, me: IBobrilNode, oldMe: IBobrilCacheNode): boolean;
+    /** called from children to parents order for new nodes */
+    postInitDom?(ctx: TCtx, me: IBobrilCacheNode, element: HTMLElement): void;
+    /** called from children to parents order for updated nodes */
+    postUpdateDom?(ctx: TCtx, me: IBobrilCacheNode, element: HTMLElement): void;
+    /** called from children to parents order for updated nodes but in every frame even when render was not run */
+    postUpdateDomEverytime?(ctx: TCtx, me: IBobrilCacheNode, element: HTMLElement): void;
+    /** called just before removing node from dom */
+    destroy?(ctx: IBobrilCtx, me: IBobrilNode, element: HTMLElement): void;
+    /** called when bubling event to parent so you could stop bubling without preventing default handling */
+    shouldStopBubble?(ctx: TCtx, name: string, param: Object): boolean;
+    /** called when broadcast wants to dive in this node so you could silence broadcast for you and your children */
+    shouldStopBroadcast?(ctx: TCtx, name: string, param: Object): boolean;
+    /** called on input element after any change with new value (string|boolean) */
+    onChange?(ctx: TCtx, value: any): void;
+    /** called on string input element when selection or caret position changes */
+    onSelectionChange?(ctx: TCtx, event: ISelectionChangeEvent): void;
+
+    onKeyDown?(ctx: TCtx, event: IKeyDownUpEvent): boolean;
+    onKeyUp?(ctx: TCtx, event: IKeyDownUpEvent): boolean;
+    onKeyPress?(ctx: TCtx, event: IKeyPressEvent): boolean;
+
+    // called on input element after click/tap
+    onClick?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onDoubleClick?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onContextMenu?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onMouseDown?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onMouseUp?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onMouseOver?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onMouseEnter?(ctx: TCtx, event: IBobrilMouseEvent): void;
+    onMouseLeave?(ctx: TCtx, event: IBobrilMouseEvent): void;
+    onMouseIn?(TCtxctx: IBobrilCtx, event: IBobrilMouseEvent): void;
+    onMouseOut?(ctx: TCtx, event: IBobrilMouseEvent): void;
+    onMouseMove?(ctx: TCtx, event: IBobrilMouseEvent): boolean;
+    onMouseWheel?(ctx: TCtx, event: IBobrilMouseWheelEvent): boolean;
+    onPointerDown?(ctx: TCtx, event: IBobrilPointerEvent): boolean;
+    onPointerMove?(ctx: TCtx, event: IBobrilPointerEvent): boolean;
+    onPointerUp?(ctx: TCtx, event: IBobrilPointerEvent): boolean;
+    onPointerCancel?(ctx: TCtx, event: IBobrilPointerEvent): boolean;
+
+    /** this component gained focus */
+    onFocus?(ctx: TCtx): void;
+    /** this component lost focus */
+    onBlur?(ctx: TCtx): void;
+    /** focus moved from outside of this element to some child of this element */
+    onFocusIn?(ctx: TCtx): void;
+    /** focus moved from inside of this element to some outside element */
+    onFocusOut?(ctx: TCtx): void;
+
+    /** if drag should start, bubbled */
+    onDragStart?(ctx: TCtx, dndCtx: IDndStartCtx): boolean;
+
+    /** broadcasted after drag started/moved/changed */
+    onDrag?(ctx: TCtx, dndCtx: IDndCtx): boolean;
+    /** broadcasted after drag ended even if without any action */
+    onDragEnd?(ctx: TCtx, dndCtx: IDndCtx): boolean;
+
+    /** Do you want to allow to drop here? bubbled */
+    onDragOver?(ctx: TCtx, dndCtx: IDndOverCtx): boolean;
+    /** User want to drop draged object here - do it - onDragOver before had to set you target */
+    onDrop?(ctx: TCtx, dndCtx: IDndCtx): boolean;
+
+    canDeactivate?(ctx: TCtx, transition: IRouteTransition): IRouteCanResult;
+}
+
+/** Basic node factory data */
+export interface INodeFactoryData {
+    /** Route params */
+    routeParams?: { [key: string]: string }
+    /** Current active route handler */
+    activeRouteHandler?: Function;
+    /** Children passed to node factory */
+    children?: IBobrilChildren;
+}
+
+/** Basic node factory context */
+export interface INodeFactoryCtx<TData extends INodeFactoryData> extends IBobrilCtx {
+    /** Node factory data */
+    data: TData;
+}
+
+/**
+ * Creates node factory (function creating nodes) of specific component.
+ * @param  {INodeFactoryComponent<TCtx, TData>} component - Node component.
+ * @return {(data?: TData, children?: IBobrilChildren) => IBobrilNode} Node factory of specific component
+ */
+export function nodeFactory<TCtx extends INodeFactoryCtx<TData>, TData extends INodeFactoryData>(
+    component: INodeFactoryComponent<TCtx, TData>): (data?: TData, children?: IBobrilChildren) => IBobrilNode {
+    return createComponent(component);
+}
+
+/**
+ * Creates virtual node factory (function creating virtual nodes) of specific component. 
+ * Virtual node does not correspond to any real dom element.
+ * @param  {INodeFactoryComponent<TCtx, TData>} component - Node component.
+ * @return {(data?: TData, children?: IBobrilChildren) => IBobrilNode} Virtual node factory of specific component.
+ */
+export function virtualNodeFactory<TCtx extends INodeFactoryCtx<TData>, TData extends INodeFactoryData>(
+    component: INodeFactoryComponent<TCtx, TData>): (data?: TData, children?: IBobrilChildren) => IBobrilNode {
+    return createVirtualComponent(component);
+}
+
+/**
+ * Creates node factory (function creating nodes) of specific base node factory with behaviour extended by component. 
+ * @param  {INodeFactoryComponent<TCtx, TData>} base - Base node factory.
+ * @param  {INodeFactoryComponent<TCtx, TData>} extension - Extending component.
+ * @param  {boolean} overrideBaseMethods - 
+ *                   When true, the base methods are called before extending methods. 
+ *                   When false, the extending methods override the base methods and these are available in ctx.component.super property.
+ *                   Default false.
+ * @return {(data?: TData, children?: IBobrilChildren) => IBobrilNode} 
+ *                  Node factory extending base node factory with specific component behavior.
+ */
+export function extendNodeFactory<TCtx extends INodeFactoryCtx<TData>, TData extends INodeFactoryData>(
+    base: (data?: TData, children?: IBobrilChildren) => IBobrilNode,
+    extension: INodeFactoryComponent<TCtx, TData>,
+    overrideBaseMethods?: boolean): (data?: TData, children?: IBobrilChildren) => IBobrilNode {
+    return !!overrideBaseMethods ? createOverridingComponent(base, extension) : createDerivedComponent(base, extension);
+}
+
+// Props
 export type IProp<T> = (value?: T) => T;
 export type IPropAsync<T> = (value?: T | PromiseLike<T>) => T;
 
